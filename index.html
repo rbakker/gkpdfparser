@@ -1,1 +1,92 @@
-Hello, world
+<script src="pdf.mjs" type="module"></script>
+
+<script type="module">
+
+function readFileAsArrayBuffer(file){
+  return new Promise((resolve, reject) => {
+    var fr = new FileReader();  
+    fr.onload = () => {
+      resolve(fr.result )
+    };
+    fr.onerror = reject;
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+async function parsePdf(evt) {
+    const outputElem = document.getElementById('textextract');
+    outputElem.innerHTML = '';
+    
+    // Loaded via <script> tag, create shortcut to access PDF.js exports.
+    var { pdfjsLib } = globalThis;
+
+    // The workerSrc property shall be specified.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs';
+
+    // Asynchronous download of PDF
+    for (const file of evt.target.files) {
+        outputElem.innerHTML += '\nFile: '+file.name+'\n';
+        const arrayBuffer = await readFileAsArrayBuffer (file);
+        const pdf = await pdfjsLib.getDocument( new Uint8Array(arrayBuffer) ).promise;
+
+        console.log('PDF loaded',pdf);
+
+        // Fetch pages
+        const jobs = [];
+        //const firstPage = pdf.getPage(1);
+
+        const pageCount = pdf.numPages;
+        console.log('Pagecount',pageCount);
+
+        for (let pageNumber=1; pageNumber<=pageCount; pageNumber++) {
+            jobs.push(
+                pdf.getPage(pageNumber).then( function (page) {
+                    return page.getTextContent().then( function(text) {
+                        let words = [];
+                        for (let s of text.items) {
+                            s = s.str;
+                            if (s != '' && s != ' ') words.push(s);
+                        }
+                        return words;
+                    })
+                })
+            );
+        }
+        const pages = await Promise.all(jobs);
+        let text = [].concat(...pages);
+        for (let i in text) {
+            i = parseInt(i); 
+            if (text[i].startsWith('Treatment dose rate')) {
+                outputElem.innerHTML += 'Treatment dose rate date: '+text[i]+'\n';
+                outputElem.innerHTML += 'Treatment dose rate value: '+text[i+1]+'\n';
+                break
+            }
+        }
+        for (let r=1; r<10; r++) {
+            for (let i in text) {
+                i = parseInt(i); 
+                if (text[i].startsWith('Run '+r+' ')) {
+                    outputElem.innerHTML += 'Run '+r+': '+text[i]+'\n';
+                    for (let s=1; s<100; s++) {
+                        let subtext = text.slice(i)
+                        for (let j in subtext) {
+                            j = parseInt(j);
+                            if (subtext[j] == ''+r+'-'+s) {
+                                outputElem.innerHTML += 'Step: '+subtext[j]+'; Shotnr: '+subtext[j+1]+'; Time: '+subtext[j+6]+'\n';
+                                break
+                            }
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
+}
+window.parsePdf = parsePdf;
+</script>
+
+<h1>Gamma Knife PDF Parser</h1>
+
+Load one or more Gamma Knife Treatment Plans (.pdf): <input type="file" multiple onchange="parsePdf(event)"/>
+<pre id="textextract">Extracted data will appear here.</pre>
