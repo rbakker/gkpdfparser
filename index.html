@@ -24,8 +24,11 @@ async function parsePdf(evt) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs';
 
     // Asynchronous download of PDF
+    let M;
     for (const file of evt.target.files) {
-        outputElem.innerHTML += '\nFile: '+file.name+'\n';
+        outputElem.innerHTML += '\nFilename\n'+file.name+'\n';
+        M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(treat\d+)([\d\w]+)/);
+        let patient=M[1], treatment=M[2], fraction=M[3];
         const arrayBuffer = await readFileAsArrayBuffer (file);
         const pdf = await pdfjsLib.getDocument( new Uint8Array(arrayBuffer) ).promise;
 
@@ -54,25 +57,32 @@ async function parsePdf(evt) {
         }
         const pages = await Promise.all(jobs);
         let text = [].concat(...pages);
+        let tdrDate = '';
+        let tdrValue = '';
+        let tdrUnit = '';
         for (let i in text) {
             i = parseInt(i); 
             if (text[i].startsWith('Treatment dose rate')) {
-                outputElem.innerHTML += 'Treatment dose rate date: '+text[i]+'\n';
-                outputElem.innerHTML += 'Treatment dose rate value: '+text[i+1]+'\n';
+                M = text[i].match(/.*\((\d+[-/]\d+[-/]\d+)\)/);
+                tdrDate = M.length>0 ? M[1] : '?';
+                const parts = text[i+1].split(' ');
+                tdrValue = parts[0];
+                tdrUnit = parts.length>0 ? parts[1] : '?';
                 break
             }
         }
+        outputElem.innerHTML += '\nPatient,Treatment,Fraction,Dose date,Dose rate ['+tdrUnit+'],Run-step,Shotnr,Time\n';
+        outputElem.innerHTML += ''+patient+','+treatment+','+fraction+','+tdrDate+','+tdrValue+'\n';
         for (let r=1; r<10; r++) {
             for (let i in text) {
                 i = parseInt(i); 
                 if (text[i].startsWith('Run '+r+' ')) {
-                    outputElem.innerHTML += 'Run '+r+': '+text[i]+'\n';
                     for (let s=1; s<100; s++) {
                         let subtext = text.slice(i)
                         for (let j in subtext) {
                             j = parseInt(j);
                             if (subtext[j] == ''+r+'-'+s) {
-                                outputElem.innerHTML += 'Step: '+subtext[j]+'; Shotnr: '+subtext[j+1]+'; Time: '+subtext[j+6]+'\n';
+                                outputElem.innerHTML += ',,,,,'+subtext[j]+','+subtext[j+1]+','+subtext[j+6]+'\n';
                                 break
                             }
                         }
