@@ -96,7 +96,7 @@ async function parsePdf(evt) {
                 const a1 = parseInt(a[1].slice(1));
                 const b0 = b[1][0];
                 const b1 = parseInt(b[1].slice(1));
-                return a0>=b0 && a1>=b1;
+                return a0>b0 ? 1 : (a0<b0 ? -1 : (a1>b1 ? 1 : (a1<b1 ? -1 : 0)));
             })
             for (let row of runTable) {
                 outputElem.innerHTML += ''+patient+','+treatment+','+fraction+','+tdrDate+','+tdrValue+','+row[0]+','+row[1]+','+row[2]+'\n';
