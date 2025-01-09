@@ -27,8 +27,16 @@ async function parsePdf(evt) {
     let M;
     for (const file of evt.target.files) {
         outputElem.innerHTML += '\nFilename\n'+file.name+'\n';
+        // RB 2025jan07 support wider range of filenames
         M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(treat\d+)([\d\w]+)/);
-        let patient=M[1], treatment=M[2], fraction=M[3];
+        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+([treat\d]+) ([k\d]+)/);
+        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+([t\d]+) ([k\d]+)/);
+        let patient='patient?', treatment='treatment?', fraction='fraction?';
+        if (M) {
+            patient=M[1], treatment=M[2], fraction=M[3];
+        } else {
+            console.log('Cannot extract patient/treatment/fraction information from file name',file.name);
+        }
         const arrayBuffer = await readFileAsArrayBuffer (file);
         const pdf = await pdfjsLib.getDocument( new Uint8Array(arrayBuffer) ).promise;
 
