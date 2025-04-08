@@ -29,8 +29,9 @@ async function parsePdf(evt) {
         outputElem.innerHTML += '\nFilename\n'+file.name+'\n';
         // RB 2025jan07 support wider range of filenames
         M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(treat\d+)([\d\w]+)/);
-        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(treat\d+) (k\d+)/);
-        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(t\d+) (k\d+)/);
+        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+(treat\d+)\s+(k\d+)/);
+        // 20240819 -- 376 -- SUN0084, t3t4  k376 -- anonymized -- planner3 -- LGP-protocol -- 09.16.21.121736.pdf
+        if (!M) M = file.name.match(/\d+[ -]+\d+[ -]+([\d\w]+)[ ,]+([t\d]+)\s+(k\d+)/);
         // 20250316 -- BRI0027t1f8 -- BRI0027, treat1f8 -- anonymized -- planner -- LGP-protocol -- 10.23.46.659827.pdf
         if (!M) M = file.name.match(/\d+[ -]+(\w+\d+)(t\d+)(f\d+)[ -]+(\w+\d+)[ ,]+(treat\d+)(f\d+)/);
         let patient='patient?', treatment='treatment?', fraction='fraction?';
@@ -62,17 +63,31 @@ async function parsePdf(evt) {
                 pdf.getPage(pageNumber).then( function (page) {
                     return page.getTextContent().then( function(text) {
                         let words = [];
+                        let x = [];
+                        let y = [];
                         for (let s of text.items) {
-                            s = s.str;
-                            if (s != '' && s != ' ') words.push(s);
+                            const word = s.str;
+                            if (word != '' && word != ' ') {
+                                words.push(word);
+                                const transf = s.transform
+                                x.push(transf[4]);
+                                y.push(transf[5]);
+                            }
                         }
-                        return words;
+                        return [words,x,y];
                     })
                 })
             );
         }
         const pages = await Promise.all(jobs);
-        let text = [].concat(...pages);
+        let text = [];
+        let xpos = [];
+        let ypos = [];
+        for (let page of pages) {
+            text = text.concat(page[0]);
+            xpos = xpos.concat(page[1]);
+            ypos = ypos.concat(page[2]);
+        }
         let tdrDate = '';
         let tdrValue = '';
         let tdrUnit = '';
@@ -92,14 +107,31 @@ async function parsePdf(evt) {
         for (let r=1; r<10; r++) {
             const runTable = [];
             for (let i in text) {
-                i = parseInt(i); 
+                i = parseInt(i);
                 if (text[i].startsWith('Run '+r+' ')) {
+                    let subtext = text.slice(i);
+                    let xposTime = undefined;
+                    for (let j in subtext) {
+                        j = parseInt(j);
+                        if (subtext[j].toLowerCase() == 'time') {
+                            xposTime = xpos[i+j];
+                        }
+                    }
                     for (let s=1; s<100; s++) {
                         let subtext = text.slice(i)
                         for (let j in subtext) {
                             j = parseInt(j);
                             if (subtext[j] == ''+r+'-'+s) {
-                                runTable.push([subtext[j],subtext[j+1],subtext[j+6]])
+                                let kTime = 6
+                                if (xposTime) {
+                                    for (let k=0; k<20; k++) {
+                                        if (xpos[i+j+k]>xposTime) {
+                                            kTime = k;
+                                            break
+                                        }
+                                    }
+                                }
+                                runTable.push([subtext[j],subtext[j+1],subtext[j+kTime]])
                                 break
                             }
                         }
